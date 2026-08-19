@@ -57,19 +57,23 @@ const TYPE_COLORS = {
   shade: "#4A4361", iron: "#9098A6", wild: "#C97B4A", venom: "#7A9E3F",
 };
 
+// A creature's strongest (tier-3) move per type carries a 1-turn cooldown
+// after use — otherwise the single best move would always dominate every
+// turn with no counterplay beyond type matchups. Weaker moves stay
+// spammable; switching/type coverage remains the primary balance lever.
 const TYPE_MOVES = {
-  ember: [{ name: "Cinder Snap", power: 45 }, { name: "Blaze Whip", power: 65 }, { name: "Inferno Burst", power: 90 }],
-  tide: [{ name: "Aqua Jab", power: 45 }, { name: "Riptide", power: 65 }, { name: "Tsunami Crash", power: 90 }],
-  bloom: [{ name: "Thorn Flick", power: 45 }, { name: "Vine Snare", power: 65 }, { name: "Verdant Overgrowth", power: 100 }],
-  volt: [{ name: "Static Zap", power: 45 }, { name: "Arc Surge", power: 65 }, { name: "Thunderquake", power: 90 }],
-  frost: [{ name: "Chill Nip", power: 45 }, { name: "Glacial Spike", power: 65 }, { name: "Absolute Zero", power: 90 }],
-  stone: [{ name: "Pebble Toss", power: 50 }, { name: "Boulder Smash", power: 65 }, { name: "Seismic Slam", power: 80 }],
-  gale: [{ name: "Wind Slice", power: 45 }, { name: "Cyclone Cutter", power: 60 }, { name: "Sky Sunder", power: 75 }],
-  mind: [{ name: "Mind Prod", power: 50 }, { name: "Psywave", power: 65 }, { name: "Mind Shatter", power: 90 }],
-  shade: [{ name: "Umbral Nip", power: 40 }, { name: "Shadow Lash", power: 65 }, { name: "Void Eclipse", power: 85 }],
-  iron: [{ name: "Alloy Jab", power: 50 }, { name: "Steel Fang", power: 65 }, { name: "Meteor Press", power: 85 }],
-  wild: [{ name: "Wild Charge", power: 55 }, { name: "Primal Roar", power: 65 }, { name: "Savage Rampage", power: 85 }],
-  venom: [{ name: "Toxin Spit", power: 40 }, { name: "Venom Lash", power: 65 }, { name: "Corrosive Burst", power: 80 }],
+  ember: [{ name: "Cinder Snap", power: 45 }, { name: "Blaze Whip", power: 65 }, { name: "Inferno Burst", power: 90, cooldown: 1 }],
+  tide: [{ name: "Aqua Jab", power: 45 }, { name: "Riptide", power: 65 }, { name: "Tsunami Crash", power: 90, cooldown: 1 }],
+  bloom: [{ name: "Thorn Flick", power: 45 }, { name: "Vine Snare", power: 65 }, { name: "Verdant Overgrowth", power: 100, cooldown: 1 }],
+  volt: [{ name: "Static Zap", power: 45 }, { name: "Arc Surge", power: 65 }, { name: "Thunderquake", power: 90, cooldown: 1 }],
+  frost: [{ name: "Chill Nip", power: 45 }, { name: "Glacial Spike", power: 65 }, { name: "Absolute Zero", power: 90, cooldown: 1 }],
+  stone: [{ name: "Pebble Toss", power: 50 }, { name: "Boulder Smash", power: 65 }, { name: "Seismic Slam", power: 80, cooldown: 1 }],
+  gale: [{ name: "Wind Slice", power: 45 }, { name: "Cyclone Cutter", power: 60 }, { name: "Sky Sunder", power: 75, cooldown: 1 }],
+  mind: [{ name: "Mind Prod", power: 50 }, { name: "Psywave", power: 65 }, { name: "Mind Shatter", power: 90, cooldown: 1 }],
+  shade: [{ name: "Umbral Nip", power: 40 }, { name: "Shadow Lash", power: 65 }, { name: "Void Eclipse", power: 85, cooldown: 1 }],
+  iron: [{ name: "Alloy Jab", power: 50 }, { name: "Steel Fang", power: 65 }, { name: "Meteor Press", power: 85, cooldown: 1 }],
+  wild: [{ name: "Wild Charge", power: 55 }, { name: "Primal Roar", power: 65 }, { name: "Savage Rampage", power: 85, cooldown: 1 }],
+  venom: [{ name: "Toxin Spit", power: 40 }, { name: "Venom Lash", power: 65 }, { name: "Corrosive Burst", power: 80, cooldown: 1 }],
 };
 
 const CHART = {
@@ -272,9 +276,11 @@ function resolveTurn(match, p1Action, p2Action) {
   const p2Mon = match.teams[p2][p2Idx];
   let hp1 = p1Mon.currentHp, hp2 = p2Mon.currentHp;
 
+  const p1MoveIdx = !p1Switch && typeof p1Action === "number" ? p1Action : null;
+  const p2MoveIdx = !p2Switch && typeof p2Action === "number" ? p2Action : null;
   const steps = [];
-  if (!p1Switch && typeof p1Action === "number") steps.push({ side: "p1", move: p1Mon.moves[p1Action] });
-  if (!p2Switch && typeof p2Action === "number") steps.push({ side: "p2", move: p2Mon.moves[p2Action] });
+  if (p1MoveIdx !== null) steps.push({ side: "p1", move: p1Mon.moves[p1MoveIdx] });
+  if (p2MoveIdx !== null) steps.push({ side: "p2", move: p2Mon.moves[p2MoveIdx] });
   if (steps.length === 2) {
     const p1First = p1Mon.stats.speed === p2Mon.stats.speed ? Math.random() < 0.5 : p1Mon.stats.speed > p2Mon.stats.speed;
     if (!p1First) steps.reverse();
@@ -298,8 +304,15 @@ function resolveTurn(match, p1Action, p2Action) {
   if (hp2 <= 0) newLog.push(`${p2Mon.name} fainted!`);
   if (hp1 <= 0) newLog.push(`${p1Mon.name} fainted!`);
 
-  const newP1Team = match.teams[p1].map((m, i) => (i === p1Idx ? { ...m, currentHp: hp1 } : m));
-  const newP2Team = match.teams[p2].map((m, i) => (i === p2Idx ? { ...m, currentHp: hp2 } : m));
+  // Cooldowns only tick for the active creature: the move just used gets
+  // set to its full cooldown, every other move counts down by one.
+  // Benched creatures are untouched, so cooldowns pause while switched
+  // out and resume when that creature comes back in.
+  const tickCooldowns = (m, usedIdx) =>
+    (m.cooldowns || m.moves.map(() => 0)).map((cd, mi) => (mi === usedIdx ? (m.moves[mi].cooldown || 0) : Math.max(0, cd - 1)));
+
+  const newP1Team = match.teams[p1].map((m, i) => (i === p1Idx ? { ...m, currentHp: hp1, cooldowns: tickCooldowns(m, p1MoveIdx) } : m));
+  const newP2Team = match.teams[p2].map((m, i) => (i === p2Idx ? { ...m, currentHp: hp2, cooldowns: tickCooldowns(m, p2MoveIdx) } : m));
   const p1Alive = newP1Team.some((m) => m.currentHp > 0);
   const p2Alive = newP2Team.some((m) => m.currentHp > 0);
 
@@ -366,8 +379,8 @@ function buildFreshMatch(room, mu) {
     id: mu.id, p1, p2,
     p1Name: nameOf(room, p1), p2Name: nameOf(room, p2),
     teams: {
-      [p1]: room.teams[p1].map((m) => ({ ...m, currentHp: m.maxHp })),
-      [p2]: room.teams[p2].map((m) => ({ ...m, currentHp: m.maxHp })),
+      [p1]: room.teams[p1].map((m) => ({ ...m, currentHp: m.maxHp, cooldowns: m.moves.map(() => 0) })),
+      [p2]: room.teams[p2].map((m) => ({ ...m, currentHp: m.maxHp, cooldowns: m.moves.map(() => 0) })),
     },
     activeIdx: { [p1]: null, [p2]: null },
     status: "choose-lead",
@@ -1360,6 +1373,7 @@ function BeastforgeApp() {
   }
   async function submitAction(action) {
     if (mySubmitted || !match || match.status !== "battle" || match.pendingSwitch) return;
+    if (typeof action === "number" && (myActive?.cooldowns?.[action] || 0) > 0) return;
     playSfx("lock");
     setMySubmitted(true);
     setShowSwitchMenu(false);
@@ -1744,12 +1758,19 @@ function BeastforgeApp() {
                   ) : (
                     <div className="flex flex-col gap-2">
                       <div className="grid grid-cols-2 gap-2">
-                        {myActive.moves.map((m, i) => (
-                          <button key={m.name} onClick={() => submitAttack(i)} style={{ background: TYPE_COLORS[m.type] || "#888" }} className="rounded-xl p-2 text-white text-left active:scale-95 transition">
-                            <div className="font-bold text-xs">{m.name}</div>
-                            <div className="text-[10px] opacity-90">{m.type.toUpperCase()} · PWR {m.power}</div>
-                          </button>
-                        ))}
+                        {myActive.moves.map((m, i) => {
+                          const onCooldown = (myActive.cooldowns?.[i] || 0) > 0;
+                          return (
+                            <button
+                              key={m.name} onClick={() => submitAttack(i)} disabled={onCooldown}
+                              style={{ background: TYPE_COLORS[m.type] || "#888" }}
+                              className="rounded-xl p-2 text-white text-left active:scale-95 transition disabled:opacity-40"
+                            >
+                              <div className="font-bold text-xs">{m.name}</div>
+                              <div className="text-[10px] opacity-90">{onCooldown ? "RECHARGING…" : `${m.type.toUpperCase()} · PWR ${m.power}`}</div>
+                            </button>
+                          );
+                        })}
                       </div>
                       {myTeam.some((m, i) => m.currentHp > 0 && i !== match.activeIdx[myId]) && (
                         <button onClick={() => setShowSwitchMenu(true)} style={{ background: "#262433", ...display, fontSize: "9px" }} className="w-full px-3 py-2 rounded-xl text-[#EFE6D0] active:scale-95 transition">
